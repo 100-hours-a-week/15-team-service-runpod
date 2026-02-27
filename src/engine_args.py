@@ -99,6 +99,8 @@ DEFAULT_ARGS = {
     "qlora_adapter_name_or_path": os.getenv('QLORA_ADAPTER_NAME_OR_PATH', None),
     "disable_logprobs_during_spec_decoding": os.getenv('DISABLE_LOGPROBS_DURING_SPEC_DECODING', None),
     "otlp_traces_endpoint": os.getenv('OTLP_TRACES_ENDPOINT', None),
+    "kv_cache_metrics": os.getenv('KV_CACHE_METRICS', None),
+    
 }
 
 def get_speculative_config():
