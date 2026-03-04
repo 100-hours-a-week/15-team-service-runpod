@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ALLOY_TEMPLATE_PATH="/src/alloy/metrics.river.tmpl"
+ALLOY_METRICS_TEMPLATE_PATH="/src/alloy/metrics.river.tmpl"
+ALLOY_LOGS_TEMPLATE_PATH="/src/alloy/logs.river.tmpl"
 ALLOY_CONFIG_PATH="/tmp/alloy-observability.river"
 ALLOY_PID=""
 WORKER_PID=""
@@ -38,11 +39,9 @@ normalize_otlp_compression() {
   esac
 }
 
-render_alloy_config() {
+render_metrics_alloy_config() {
   local metrics_active="$1"
-  local logs_active="$2"
-  local metrics_endpoint="$3"
-  local logs_endpoint="$4"
+  local metrics_endpoint="$2"
 
   local scrape_target="${METRICS_SCRAPE_TARGET:-127.0.0.1:8000}"
   local scrape_path="${METRICS_SCRAPE_PATH:-/metrics}"
@@ -55,36 +54,16 @@ render_alloy_config() {
   local metrics_otlp_insecure_skip_verify
   local metrics_forward_to
 
-  local logs_file_path="${LOGS_FILE_PATH:-/tmp/worker.log}"
-  local logs_otlp_timeout="${LOGS_OTLP_TIMEOUT:-10s}"
-  local logs_otlp_compression="${LOGS_OTLP_COMPRESSION:-gzip}"
-  local logs_otlp_insecure
-  local logs_otlp_insecure_skip_verify
-  local logs_file_include
-  local logs_receiver_output
-
   metrics_otlp_insecure="$(to_river_bool "${METRICS_OTLP_INSECURE:-false}")"
   metrics_otlp_insecure_skip_verify="$(to_river_bool "${METRICS_OTLP_INSECURE_SKIP_VERIFY:-false}")"
-  logs_otlp_insecure="$(to_river_bool "${LOGS_OTLP_INSECURE:-false}")"
-  logs_otlp_insecure_skip_verify="$(to_river_bool "${LOGS_OTLP_INSECURE_SKIP_VERIFY:-false}")"
 
   metrics_otlp_compression="$(normalize_otlp_compression "${metrics_otlp_compression}" "METRICS_OTLP_COMPRESSION")"
-  logs_otlp_compression="$(normalize_otlp_compression "${logs_otlp_compression}" "LOGS_OTLP_COMPRESSION")"
 
   if [[ "${metrics_active}" == "true" ]]; then
     metrics_forward_to="[otelcol.receiver.prometheus.vllm.receiver]"
   else
     metrics_forward_to="[]"
     metrics_endpoint="${INACTIVE_OTLP_ENDPOINT}"
-  fi
-
-  if [[ "${logs_active}" == "true" ]]; then
-    logs_file_include="[\"${logs_file_path}\"]"
-    logs_receiver_output="[otelcol.processor.resource.worker_logs.input]"
-  else
-    logs_file_include="[]"
-    logs_receiver_output="[]"
-    logs_endpoint="${INACTIVE_OTLP_ENDPOINT}"
   fi
 
   sed \
@@ -99,26 +78,70 @@ render_alloy_config() {
     -e "s|__METRICS_PIPELINE_NAME__|$(escape_sed "${pipeline_name}")|g" \
     -e "s|__METRICS_OTLP_INSECURE__|${metrics_otlp_insecure}|g" \
     -e "s|__METRICS_OTLP_INSECURE_SKIP_VERIFY__|${metrics_otlp_insecure_skip_verify}|g" \
-    -e "s|__LOGS_FILE_INCLUDE__|$(escape_sed "${logs_file_include}")|g" \
-    -e "s|__LOGS_RECEIVER_OUTPUT__|$(escape_sed "${logs_receiver_output}")|g" \
-    -e "s|__LOGS_OTLP_HTTP_ENDPOINT__|$(escape_sed "${logs_endpoint}")|g" \
-    -e "s|__LOGS_OTLP_TIMEOUT__|$(escape_sed "${logs_otlp_timeout}")|g" \
-    -e "s|__LOGS_OTLP_COMPRESSION__|$(escape_sed "${logs_otlp_compression}")|g" \
-    -e "s|__LOGS_OTLP_INSECURE__|${logs_otlp_insecure}|g" \
-    -e "s|__LOGS_OTLP_INSECURE_SKIP_VERIFY__|${logs_otlp_insecure_skip_verify}|g" \
-    "${ALLOY_TEMPLATE_PATH}" > "${ALLOY_CONFIG_PATH}"
+    "${ALLOY_METRICS_TEMPLATE_PATH}" > "${ALLOY_CONFIG_PATH}"
+}
+
+append_logs_alloy_config() {
+  local logs_endpoint="$1"
+  local logs_file_path="${LOGS_FILE_PATH:-/tmp/worker.log}"
+  local logs_otlp_timeout="${LOGS_OTLP_TIMEOUT:-10s}"
+  local logs_otlp_compression="${LOGS_OTLP_COMPRESSION:-gzip}"
+  local logs_otlp_insecure
+  local logs_otlp_insecure_skip_verify
+
+  if [[ ! -f "${ALLOY_LOGS_TEMPLATE_PATH}" ]]; then
+    log "Alloy logs template not found at ${ALLOY_LOGS_TEMPLATE_PATH}."
+    return 1
+  fi
+
+  logs_otlp_insecure="$(to_river_bool "${LOGS_OTLP_INSECURE:-false}")"
+  logs_otlp_insecure_skip_verify="$(to_river_bool "${LOGS_OTLP_INSECURE_SKIP_VERIFY:-false}")"
+  logs_otlp_compression="$(normalize_otlp_compression "${logs_otlp_compression}" "LOGS_OTLP_COMPRESSION")"
+
+  {
+    printf "\n"
+    sed \
+      -e "s|__LOGS_FILE_INCLUDE__|[\"$(escape_sed "${logs_file_path}")\"]|g" \
+      -e "s|__LOGS_OTLP_HTTP_ENDPOINT__|$(escape_sed "${logs_endpoint}")|g" \
+      -e "s|__LOGS_OTLP_TIMEOUT__|$(escape_sed "${logs_otlp_timeout}")|g" \
+      -e "s|__LOGS_OTLP_COMPRESSION__|$(escape_sed "${logs_otlp_compression}")|g" \
+      -e "s|__LOGS_OTLP_INSECURE__|${logs_otlp_insecure}|g" \
+      -e "s|__LOGS_OTLP_INSECURE_SKIP_VERIFY__|${logs_otlp_insecure_skip_verify}|g" \
+      "${ALLOY_LOGS_TEMPLATE_PATH}"
+  } >> "${ALLOY_CONFIG_PATH}"
+}
+
+start_alloy_process() {
+  local use_preview="$1"
+  if [[ "${use_preview}" == "true" ]]; then
+    alloy run --stability.level=public-preview "${ALLOY_CONFIG_PATH}" &
+  else
+    alloy run "${ALLOY_CONFIG_PATH}" &
+  fi
+  ALLOY_PID=$!
+
+  # If Alloy exits immediately (invalid config/component), continue serving.
+  sleep 1
+  if ! kill -0 "${ALLOY_PID}" 2>/dev/null; then
+    wait "${ALLOY_PID}" 2>/dev/null || true
+    ALLOY_PID=""
+    return 1
+  fi
+  return 0
 }
 
 start_alloy_if_enabled() {
   local metrics_enabled
   local logs_enabled
+  local preview_logs_enabled
   local metrics_endpoint
   local logs_endpoint
   local metrics_active="false"
   local logs_active="false"
 
   metrics_enabled="$(to_river_bool "${METRICS_EXPORT_ENABLED:-true}")"
-  logs_enabled="$(to_river_bool "${LOGS_EXPORT_ENABLED:-true}")"
+  logs_enabled="$(to_river_bool "${LOGS_EXPORT_ENABLED:-false}")"
+  preview_logs_enabled="$(to_river_bool "${ALLOY_ENABLE_PREVIEW_LOGS:-false}")"
 
   metrics_endpoint="${METRICS_OTLP_HTTP_ENDPOINT:-}"
   logs_endpoint="${LOGS_OTLP_HTTP_ENDPOINT:-}"
@@ -127,8 +150,8 @@ start_alloy_if_enabled() {
     logs_endpoint="${metrics_endpoint}"
   fi
 
-  if [[ ! -f "${ALLOY_TEMPLATE_PATH}" ]]; then
-    log "Alloy template not found at ${ALLOY_TEMPLATE_PATH}. Starting worker without Alloy."
+  if [[ ! -f "${ALLOY_METRICS_TEMPLATE_PATH}" ]]; then
+    log "Alloy template not found at ${ALLOY_METRICS_TEMPLATE_PATH}. Starting worker without Alloy."
     return
   fi
 
@@ -148,7 +171,9 @@ start_alloy_if_enabled() {
   fi
 
   if [[ "${logs_enabled}" == "true" ]]; then
-    if [[ -n "${logs_endpoint}" ]]; then
+    if [[ "${preview_logs_enabled}" != "true" ]]; then
+      log "LOGS_EXPORT_ENABLED is true but ALLOY_ENABLE_PREVIEW_LOGS is false. Logs export disabled; worker will continue."
+    elif [[ -n "${logs_endpoint}" ]]; then
       logs_active="true"
     else
       log "LOGS_OTLP_HTTP_ENDPOINT and METRICS_OTLP_HTTP_ENDPOINT are empty. Logs export disabled; worker will continue."
@@ -162,10 +187,23 @@ start_alloy_if_enabled() {
     return
   fi
 
-  render_alloy_config "${metrics_active}" "${logs_active}" "${metrics_endpoint}" "${logs_endpoint}"
-  alloy run "${ALLOY_CONFIG_PATH}" &
-  ALLOY_PID=$!
-  log "Started Alloy observability pipeline (pid=${ALLOY_PID}) metrics=${metrics_active} logs=${logs_active} using ${ALLOY_CONFIG_PATH}."
+  render_metrics_alloy_config "${metrics_active}" "${metrics_endpoint}"
+
+  if [[ "${logs_active}" == "true" ]]; then
+    if append_logs_alloy_config "${logs_endpoint}" && start_alloy_process "true"; then
+      log "Started Alloy observability pipeline (pid=${ALLOY_PID}) metrics=${metrics_active} logs=${logs_active} using ${ALLOY_CONFIG_PATH}."
+      return
+    fi
+    log "Alloy failed to start with preview logs. Falling back to metrics-only pipeline."
+    logs_active="false"
+    render_metrics_alloy_config "${metrics_active}" "${metrics_endpoint}"
+  fi
+
+  if start_alloy_process "false"; then
+    log "Started Alloy observability pipeline (pid=${ALLOY_PID}) metrics=${metrics_active} logs=${logs_active} using ${ALLOY_CONFIG_PATH}."
+  else
+    log "Alloy failed to start. Continuing without Alloy; worker will continue."
+  fi
 }
 
 stop_alloy() {

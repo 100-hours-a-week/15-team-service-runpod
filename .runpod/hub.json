@@ -927,6 +927,86 @@
           "default": "vllm",
           "advanced": true
         }
+      },
+      {
+        "key": "ALLOY_ENABLE_PREVIEW_LOGS",
+        "input": {
+          "name": "Alloy Preview Logs",
+          "type": "boolean",
+          "description": "Enable Alloy public-preview components for logs export.",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_EXPORT_ENABLED",
+        "input": {
+          "name": "Logs Export Enabled",
+          "type": "boolean",
+          "description": "Enable logs OTLP export pipeline (requires Alloy Preview Logs).",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_OTLP_HTTP_ENDPOINT",
+        "input": {
+          "name": "Logs OTLP HTTP Endpoint",
+          "type": "string",
+          "description": "External logs OTLP HTTP endpoint. Empty falls back to METRICS_OTLP_HTTP_ENDPOINT.",
+          "default": "",
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_OTLP_INSECURE",
+        "input": {
+          "name": "Logs OTLP Insecure",
+          "type": "boolean",
+          "description": "Disable TLS for logs OTLP HTTP exporter.",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_OTLP_INSECURE_SKIP_VERIFY",
+        "input": {
+          "name": "Logs OTLP Insecure Skip Verify",
+          "type": "boolean",
+          "description": "Skip TLS certificate verification for logs OTLP exporter.",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_OTLP_COMPRESSION",
+        "input": {
+          "name": "Logs OTLP Compression",
+          "type": "string",
+          "description": "Compression mode for logs OTLP HTTP exporter.",
+          "options": [
+            {
+              "label": "gzip",
+              "value": "gzip"
+            },
+            {
+              "label": "none",
+              "value": "none"
+            }
+          ],
+          "default": "gzip",
+          "advanced": true
+        }
+      },
+      {
+        "key": "LOGS_OTLP_TIMEOUT",
+        "input": {
+          "name": "Logs OTLP Timeout",
+          "type": "string",
+          "description": "Timeout for logs OTLP HTTP export requests.",
+          "default": "10s",
+          "advanced": true
+        }
       }
     ]
   }

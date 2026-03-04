@@ -168,7 +168,8 @@ Use these variables to run the Alloy sidecar pipeline for metrics + logs OTLP ex
 | `METRICS_OTLP_COMPRESSION`           | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode.                                                                                                        |
 | `METRICS_OTLP_TIMEOUT`               | `10s`              | `string`       | Timeout for OTLP HTTP export requests.                                                                                             |
 | `METRICS_PIPELINE_NAME`              | `vllm`             | `string`       | Pipeline/job label name attached to scraped metrics.                                                                               |
-| `LOGS_EXPORT_ENABLED`                | `true`             | `bool`         | Enable the Alloy-based logs pipeline.                                                                                              |
+| `ALLOY_ENABLE_PREVIEW_LOGS`          | `false`            | `bool`         | Enable Alloy preview components for logs export. Must be `true` for logs OTLP pipeline to start.                                 |
+| `LOGS_EXPORT_ENABLED`                | `false`            | `bool`         | Enable the Alloy-based logs pipeline (preview-only).                                                                               |
 | `LOGS_OTLP_HTTP_ENDPOINT`            | `""`               | `string`       | Logs OTLP HTTP endpoint. When empty, it falls back to `METRICS_OTLP_HTTP_ENDPOINT`.                                               |
 | `LOGS_OTLP_INSECURE`                 | `false`            | `bool`         | Disable TLS for logs OTLP HTTP exporter connections.                                                                               |
 | `LOGS_OTLP_INSECURE_SKIP_VERIFY`     | `false`            | `bool`         | Skip TLS certificate validation for logs OTLP HTTP export.                                                                         |
@@ -180,6 +181,11 @@ Use these variables to run the Alloy sidecar pipeline for metrics + logs OTLP ex
 | `LOGS_FILE_BACKUP_COUNT`             | `4`                | `int`          | Number of rotated backups retained. Total cap is `(backup_count + 1) * max_bytes` (default: `5 * 20MB = 100MB`).                 |
 | `LOGS_INCLUDE_PROMPT_TEXT`           | `false`            | `bool`         | Include prompt text in worker logs when enabled. Keep disabled in production for sensitive data protection.                        |
 | `LOGS_INCLUDE_RESPONSE_TEXT`         | `false`            | `bool`         | Include model response text in worker logs when enabled. Keep disabled in production for sensitive data protection.                |
+
+Notes:
+
+- GA-safe default is metrics-only.
+- Logs OTLP pipeline requires both `ALLOY_ENABLE_PREVIEW_LOGS=true` and `LOGS_EXPORT_ENABLED=true`.
 
 ## Advanced Settings
 

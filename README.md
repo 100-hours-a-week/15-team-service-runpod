@@ -69,7 +69,8 @@ Trace export remains vLLM-native:
 OTLP_TRACES_ENDPOINT=https://<collector>:4318/v1/traces
 ```
 
-Metrics + logs export use Alloy inside the same container:
+Metrics export uses Alloy in the same container (GA-safe default).
+Logs export is available as an explicit preview opt-in.
 
 `vLLM localhost scrape + worker file logs -> Alloy pipeline -> external OTLP endpoint`
 
@@ -79,7 +80,8 @@ Key environment variables:
 | ---------------------------------- | ----------------- | --------------------------------------------------------------------------- |
 | `METRICS_EXPORT_ENABLED`           | `true`            | Enable metrics OTLP export pipeline.                                        |
 | `METRICS_OTLP_HTTP_ENDPOINT`       | `""`              | Metrics OTLP HTTP endpoint. Empty disables metrics export.                  |
-| `LOGS_EXPORT_ENABLED`              | `true`            | Enable logs OTLP export pipeline.                                           |
+| `ALLOY_ENABLE_PREVIEW_LOGS`        | `false`           | Enable preview-only Alloy logs components (required for logs pipeline).     |
+| `LOGS_EXPORT_ENABLED`              | `false`           | Enable logs OTLP export pipeline (requires preview logs enabled).           |
 | `LOGS_OTLP_HTTP_ENDPOINT`          | `""`              | Logs OTLP HTTP endpoint. Empty falls back to `METRICS_OTLP_HTTP_ENDPOINT`.  |
 | `LOGS_OTLP_INSECURE`               | `false`           | Disable TLS for logs OTLP exporter.                                         |
 | `LOGS_OTLP_INSECURE_SKIP_VERIFY`   | `false`           | Skip TLS certificate validation for logs OTLP exporter.                     |
@@ -92,19 +94,29 @@ Key environment variables:
 | `LOGS_INCLUDE_PROMPT_TEXT`         | `false`           | Include prompt text in logs (disabled by default for sensitive data safety). |
 | `LOGS_INCLUDE_RESPONSE_TEXT`       | `false`           | Include response text in logs (disabled by default for sensitive data safety). |
 
-Example:
+Example (GA metrics only):
 
 ```bash
 METRICS_EXPORT_ENABLED=true
 METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
-LOGS_EXPORT_ENABLED=true
-LOGS_OTLP_HTTP_ENDPOINT=
+ALLOY_ENABLE_PREVIEW_LOGS=false
+LOGS_EXPORT_ENABLED=false
 LOGS_LEVEL=INFO
 LOGS_FILE_PATH=/tmp/worker.log
 LOGS_FILE_MAX_BYTES=20971520
 LOGS_FILE_BACKUP_COUNT=4
 LOGS_INCLUDE_PROMPT_TEXT=false
 LOGS_INCLUDE_RESPONSE_TEXT=false
+```
+
+Example (preview logs + metrics):
+
+```bash
+METRICS_EXPORT_ENABLED=true
+METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
+ALLOY_ENABLE_PREVIEW_LOGS=true
+LOGS_EXPORT_ENABLED=true
+LOGS_OTLP_HTTP_ENDPOINT=
 ```
 
 If an OTLP endpoint is missing/unreachable, only that signal pipeline is disabled or dropped; inference continues.
