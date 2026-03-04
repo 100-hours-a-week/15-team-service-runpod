@@ -2,7 +2,12 @@ FROM nvidia/cuda:12.4.1-base-ubuntu22.04
 ARG ALLOY_VERSION=1.13.2
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends python3-pip curl ca-certificates \
+    && apt-get install -y --no-install-recommends \
+        python3-pip \
+        python3-dev \
+        build-essential \
+        curl \
+        ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
@@ -66,7 +71,9 @@ ENV MODEL_NAME=$MODEL_NAME \
     METRICS_OTLP_INSECURE_SKIP_VERIFY=false \
     METRICS_OTLP_COMPRESSION=gzip \
     METRICS_OTLP_TIMEOUT=10s \
-    METRICS_PIPELINE_NAME=vllm
+    METRICS_PIPELINE_NAME=vllm \
+    CC=/usr/bin/gcc \
+    CXX=/usr/bin/g++
 
 ENV PYTHONPATH="/:/vllm-workspace"
 
