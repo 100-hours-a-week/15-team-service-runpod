@@ -30,6 +30,24 @@ All behaviour is controlled through environment variables:
 
 For complete configuration options, see the [full configuration documentation](https://github.com/runpod-workers/worker-vllm/blob/main/docs/configuration.md).
 
+## Metrics Push with Alloy
+
+This worker can scrape internal vLLM Prometheus metrics and push them out as OTLP HTTP:
+
+`vLLM localhost scrape -> Alloy pipeline -> external OTLP endpoint`
+
+Example configuration:
+
+```bash
+METRICS_EXPORT_ENABLED=true
+METRICS_SCRAPE_TARGET=127.0.0.1:8000
+METRICS_SCRAPE_PATH=/metrics
+METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
+METRICS_OTLP_COMPRESSION=gzip
+```
+
+If `METRICS_OTLP_HTTP_ENDPOINT` is not set, metrics export remains disabled and the worker continues serving inference.
+
 ## API Usage
 
 This worker supports two API formats: **RunPod native** and **OpenAI-compatible**.

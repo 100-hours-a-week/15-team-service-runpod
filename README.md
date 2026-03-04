@@ -61,6 +61,24 @@ Configure worker-vllm using environment variables:
 
 For the complete list of all available environment variables, examples, and detailed descriptions: **[Configuration](docs/configuration.md)**
 
+### Metrics Push with Alloy
+
+This worker can convert local Prometheus metrics to OTLP HTTP push from inside the same serverless container:
+
+`vLLM localhost scrape -> Alloy pipeline -> external OTLP endpoint`
+
+Example environment variables:
+
+```bash
+METRICS_EXPORT_ENABLED=true
+METRICS_SCRAPE_TARGET=127.0.0.1:8000
+METRICS_SCRAPE_PATH=/metrics
+METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
+METRICS_OTLP_COMPRESSION=gzip
+```
+
+If `METRICS_OTLP_HTTP_ENDPOINT` is not set, metrics export stays disabled and inference still runs normally.
+
 ## Option 2: Build Docker Image with Model Inside
 
 To build an image with the model baked in, you must specify the following docker arguments when building the image.

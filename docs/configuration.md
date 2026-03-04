@@ -145,6 +145,24 @@ The way this works is that the first request will have a batch size of `DEFAULT_
 | `DISABLE_LOG_STATS`    | False   | `bool`       | Enables or disables vLLM stats logging.                                                                                                                                    |
 | `ENABLE_LOG_REQUESTS`  | False   | `bool`       | Enables vLLM request logging. (Replaces deprecated `DISABLE_LOG_REQUESTS` in vLLM 0.15.0)                                                                                  |
 
+## Observability / Metrics Push (Alloy)
+
+Use these variables to scrape vLLM Prometheus metrics locally and push them to an external OTLP HTTP endpoint.
+
+| Variable                             | Default          | Type/Choices       | Description                                                                                             |
+| ------------------------------------ | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `METRICS_EXPORT_ENABLED`             | `true`           | `bool`             | Enable the Alloy-based metrics pipeline.                                                                |
+| `METRICS_SCRAPE_TARGET`              | `127.0.0.1:8000` | `string`           | Prometheus scrape target inside the worker container.                                                   |
+| `METRICS_SCRAPE_PATH`                | `/metrics`       | `string`           | Scrape path for the vLLM metrics endpoint.                                                              |
+| `METRICS_SCRAPE_INTERVAL`            | `15s`            | `string`           | Scrape interval.                                                                                        |
+| `METRICS_SCRAPE_TIMEOUT`             | `5s`             | `string`           | Scrape timeout.                                                                                         |
+| `METRICS_OTLP_HTTP_ENDPOINT`         | `""`             | `string`           | External OTLP HTTP endpoint (for example `https://collector:4318`). If unset, metrics export is disabled. |
+| `METRICS_OTLP_INSECURE`              | `false`          | `bool`             | Disable TLS for OTLP HTTP exporter connections.                                                         |
+| `METRICS_OTLP_INSECURE_SKIP_VERIFY`  | `false`          | `bool`             | Skip TLS certificate validation when TLS is enabled.                                                    |
+| `METRICS_OTLP_COMPRESSION`           | `gzip`           | `gzip`, `none`     | OTLP HTTP compression mode.                                                                             |
+| `METRICS_OTLP_TIMEOUT`               | `10s`            | `string`           | Timeout for OTLP HTTP export requests.                                                                  |
+| `METRICS_PIPELINE_NAME`              | `vllm`           | `string`           | Pipeline/job label name attached to scraped metrics.                                                    |
+
 ## Advanced Settings
 
 | Variable                    | Default | Type    | Description                                                                                                                                            |

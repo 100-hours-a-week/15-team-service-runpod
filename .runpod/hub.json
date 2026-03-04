@@ -807,6 +807,126 @@
           "default": "",
           "advanced": true
         }
+      },
+      {
+        "key": "METRICS_EXPORT_ENABLED",
+        "input": {
+          "name": "Metrics Export Enabled",
+          "type": "boolean",
+          "description": "Enable internal vLLM metrics scrape and OTLP push via Alloy.",
+          "default": true,
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_SCRAPE_TARGET",
+        "input": {
+          "name": "Metrics Scrape Target",
+          "type": "string",
+          "description": "Prometheus scrape target for vLLM metrics.",
+          "default": "127.0.0.1:8000",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_SCRAPE_PATH",
+        "input": {
+          "name": "Metrics Scrape Path",
+          "type": "string",
+          "description": "HTTP path exposed by vLLM metrics endpoint.",
+          "default": "/metrics",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_SCRAPE_INTERVAL",
+        "input": {
+          "name": "Metrics Scrape Interval",
+          "type": "string",
+          "description": "How often Alloy scrapes vLLM metrics.",
+          "default": "15s",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_SCRAPE_TIMEOUT",
+        "input": {
+          "name": "Metrics Scrape Timeout",
+          "type": "string",
+          "description": "Timeout for each scrape attempt.",
+          "default": "5s",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_OTLP_HTTP_ENDPOINT",
+        "input": {
+          "name": "Metrics OTLP HTTP Endpoint",
+          "type": "string",
+          "description": "External OTLP HTTP endpoint (for example https://collector:4318). If unset, metrics export stays disabled.",
+          "default": "",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_OTLP_INSECURE",
+        "input": {
+          "name": "Metrics OTLP Insecure",
+          "type": "boolean",
+          "description": "Disable TLS for OTLP HTTP exporter.",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_OTLP_INSECURE_SKIP_VERIFY",
+        "input": {
+          "name": "Metrics OTLP Insecure Skip Verify",
+          "type": "boolean",
+          "description": "Skip TLS certificate verification for OTLP HTTP exporter.",
+          "default": false,
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_OTLP_COMPRESSION",
+        "input": {
+          "name": "Metrics OTLP Compression",
+          "type": "string",
+          "description": "Compression mode for OTLP HTTP exporter.",
+          "options": [
+            {
+              "label": "gzip",
+              "value": "gzip"
+            },
+            {
+              "label": "none",
+              "value": "none"
+            }
+          ],
+          "default": "gzip",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_OTLP_TIMEOUT",
+        "input": {
+          "name": "Metrics OTLP Timeout",
+          "type": "string",
+          "description": "Timeout for OTLP HTTP export requests.",
+          "default": "10s",
+          "advanced": true
+        }
+      },
+      {
+        "key": "METRICS_PIPELINE_NAME",
+        "input": {
+          "name": "Metrics Pipeline Name",
+          "type": "string",
+          "description": "Job label name attached to the scraped metrics stream.",
+          "default": "vllm",
+          "advanced": true
+        }
       }
     ]
   }
