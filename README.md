@@ -61,23 +61,53 @@ Configure worker-vllm using environment variables:
 
 For the complete list of all available environment variables, examples, and detailed descriptions: **[Configuration](docs/configuration.md)**
 
-### Metrics Push with Alloy
+### Observability (OTLP Traces + Metrics + Logs)
 
-This worker can convert local Prometheus metrics to OTLP HTTP push from inside the same serverless container:
+Trace export remains vLLM-native:
 
-`vLLM localhost scrape -> Alloy pipeline -> external OTLP endpoint`
+```bash
+OTLP_TRACES_ENDPOINT=https://<collector>:4318/v1/traces
+```
 
-Example environment variables:
+Metrics + logs export use Alloy inside the same container:
+
+`vLLM localhost scrape + worker file logs -> Alloy pipeline -> external OTLP endpoint`
+
+Key environment variables:
+
+| Environment Variable               | Default           | Description                                                                 |
+| ---------------------------------- | ----------------- | --------------------------------------------------------------------------- |
+| `METRICS_EXPORT_ENABLED`           | `true`            | Enable metrics OTLP export pipeline.                                        |
+| `METRICS_OTLP_HTTP_ENDPOINT`       | `""`              | Metrics OTLP HTTP endpoint. Empty disables metrics export.                  |
+| `LOGS_EXPORT_ENABLED`              | `true`            | Enable logs OTLP export pipeline.                                           |
+| `LOGS_OTLP_HTTP_ENDPOINT`          | `""`              | Logs OTLP HTTP endpoint. Empty falls back to `METRICS_OTLP_HTTP_ENDPOINT`.  |
+| `LOGS_OTLP_INSECURE`               | `false`           | Disable TLS for logs OTLP exporter.                                         |
+| `LOGS_OTLP_INSECURE_SKIP_VERIFY`   | `false`           | Skip TLS certificate validation for logs OTLP exporter.                     |
+| `LOGS_OTLP_COMPRESSION`            | `gzip`            | Logs OTLP HTTP compression (`gzip` or `none`).                              |
+| `LOGS_OTLP_TIMEOUT`                | `10s`             | Logs OTLP HTTP timeout.                                                     |
+| `LOGS_LEVEL`                       | `INFO`            | Python root log level.                                                      |
+| `LOGS_FILE_PATH`                   | `/tmp/worker.log` | Rotating log file path.                                                     |
+| `LOGS_FILE_MAX_BYTES`              | `20971520`        | Max bytes per file before rotation (20MB).                                  |
+| `LOGS_FILE_BACKUP_COUNT`           | `4`               | Backup files to retain. Total cap: `(4 + 1) * 20MB = 100MB`.               |
+| `LOGS_INCLUDE_PROMPT_TEXT`         | `false`           | Include prompt text in logs (disabled by default for sensitive data safety). |
+| `LOGS_INCLUDE_RESPONSE_TEXT`       | `false`           | Include response text in logs (disabled by default for sensitive data safety). |
+
+Example:
 
 ```bash
 METRICS_EXPORT_ENABLED=true
-METRICS_SCRAPE_TARGET=127.0.0.1:8000
-METRICS_SCRAPE_PATH=/metrics
 METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
-METRICS_OTLP_COMPRESSION=gzip
+LOGS_EXPORT_ENABLED=true
+LOGS_OTLP_HTTP_ENDPOINT=
+LOGS_LEVEL=INFO
+LOGS_FILE_PATH=/tmp/worker.log
+LOGS_FILE_MAX_BYTES=20971520
+LOGS_FILE_BACKUP_COUNT=4
+LOGS_INCLUDE_PROMPT_TEXT=false
+LOGS_INCLUDE_RESPONSE_TEXT=false
 ```
 
-If `METRICS_OTLP_HTTP_ENDPOINT` is not set, metrics export stays disabled and inference still runs normally.
+If an OTLP endpoint is missing/unreachable, only that signal pipeline is disabled or dropped; inference continues.
 
 ## Option 2: Build Docker Image with Model Inside
 

@@ -12,8 +12,6 @@ except ImportError:
     logging.warning("Error importing vllm, skipping related imports. This is ONLY expected when baking model into docker image from a machine without GPUs")
     pass
 
-logging.basicConfig(level=logging.INFO)
-
 # Updated to parse multiple comma-separated multimodal limits (e.g., 'image=1,video=0')
 def convert_limit_mm_per_prompt(input_string: str):
     result = {}

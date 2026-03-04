@@ -145,23 +145,41 @@ The way this works is that the first request will have a batch size of `DEFAULT_
 | `DISABLE_LOG_STATS`    | False   | `bool`       | Enables or disables vLLM stats logging.                                                                                                                                    |
 | `ENABLE_LOG_REQUESTS`  | False   | `bool`       | Enables vLLM request logging. (Replaces deprecated `DISABLE_LOG_REQUESTS` in vLLM 0.15.0)                                                                                  |
 
-## Observability / Metrics Push (Alloy)
+## Observability / OTLP (Traces + Metrics + Logs)
 
-Use these variables to scrape vLLM Prometheus metrics locally and push them to an external OTLP HTTP endpoint.
+`OTLP_TRACES_ENDPOINT` is still used by vLLM directly for trace export.
 
-| Variable                             | Default          | Type/Choices       | Description                                                                                             |
-| ------------------------------------ | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `METRICS_EXPORT_ENABLED`             | `true`           | `bool`             | Enable the Alloy-based metrics pipeline.                                                                |
-| `METRICS_SCRAPE_TARGET`              | `127.0.0.1:8000` | `string`           | Prometheus scrape target inside the worker container.                                                   |
-| `METRICS_SCRAPE_PATH`                | `/metrics`       | `string`           | Scrape path for the vLLM metrics endpoint.                                                              |
-| `METRICS_SCRAPE_INTERVAL`            | `15s`            | `string`           | Scrape interval.                                                                                        |
-| `METRICS_SCRAPE_TIMEOUT`             | `5s`             | `string`           | Scrape timeout.                                                                                         |
-| `METRICS_OTLP_HTTP_ENDPOINT`         | `""`             | `string`           | External OTLP HTTP endpoint (for example `https://collector:4318`). If unset, metrics export is disabled. |
-| `METRICS_OTLP_INSECURE`              | `false`          | `bool`             | Disable TLS for OTLP HTTP exporter connections.                                                         |
-| `METRICS_OTLP_INSECURE_SKIP_VERIFY`  | `false`          | `bool`             | Skip TLS certificate validation when TLS is enabled.                                                    |
-| `METRICS_OTLP_COMPRESSION`           | `gzip`           | `gzip`, `none`     | OTLP HTTP compression mode.                                                                             |
-| `METRICS_OTLP_TIMEOUT`               | `10s`            | `string`           | Timeout for OTLP HTTP export requests.                                                                  |
-| `METRICS_PIPELINE_NAME`              | `vllm`           | `string`           | Pipeline/job label name attached to scraped metrics.                                                    |
+| Variable                | Default | Type/Choices | Description                                       |
+| ----------------------- | ------- | ------------ | ------------------------------------------------- |
+| `OTLP_TRACES_ENDPOINT`  | `None`  | `string`     | OTLP endpoint used by vLLM trace instrumentation. |
+
+Use these variables to run the Alloy sidecar pipeline for metrics + logs OTLP export.
+
+| Variable                             | Default            | Type/Choices   | Description                                                                                                                        |
+| ------------------------------------ | ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `METRICS_EXPORT_ENABLED`             | `true`             | `bool`         | Enable the Alloy-based metrics pipeline.                                                                                           |
+| `METRICS_SCRAPE_TARGET`              | `127.0.0.1:8000`   | `string`       | Prometheus scrape target inside the worker container.                                                                              |
+| `METRICS_SCRAPE_PATH`                | `/metrics`         | `string`       | Scrape path for the vLLM metrics endpoint.                                                                                         |
+| `METRICS_SCRAPE_INTERVAL`            | `15s`              | `string`       | Scrape interval.                                                                                                                   |
+| `METRICS_SCRAPE_TIMEOUT`             | `5s`               | `string`       | Scrape timeout.                                                                                                                    |
+| `METRICS_OTLP_HTTP_ENDPOINT`         | `""`               | `string`       | External OTLP HTTP endpoint (for example `https://collector:4318`). If unset, metrics export is disabled.                        |
+| `METRICS_OTLP_INSECURE`              | `false`            | `bool`         | Disable TLS for OTLP HTTP exporter connections.                                                                                    |
+| `METRICS_OTLP_INSECURE_SKIP_VERIFY`  | `false`            | `bool`         | Skip TLS certificate validation when TLS is enabled.                                                                               |
+| `METRICS_OTLP_COMPRESSION`           | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode.                                                                                                        |
+| `METRICS_OTLP_TIMEOUT`               | `10s`              | `string`       | Timeout for OTLP HTTP export requests.                                                                                             |
+| `METRICS_PIPELINE_NAME`              | `vllm`             | `string`       | Pipeline/job label name attached to scraped metrics.                                                                               |
+| `LOGS_EXPORT_ENABLED`                | `true`             | `bool`         | Enable the Alloy-based logs pipeline.                                                                                              |
+| `LOGS_OTLP_HTTP_ENDPOINT`            | `""`               | `string`       | Logs OTLP HTTP endpoint. When empty, it falls back to `METRICS_OTLP_HTTP_ENDPOINT`.                                               |
+| `LOGS_OTLP_INSECURE`                 | `false`            | `bool`         | Disable TLS for logs OTLP HTTP exporter connections.                                                                               |
+| `LOGS_OTLP_INSECURE_SKIP_VERIFY`     | `false`            | `bool`         | Skip TLS certificate validation for logs OTLP HTTP export.                                                                         |
+| `LOGS_OTLP_COMPRESSION`              | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode for logs.                                                                                               |
+| `LOGS_OTLP_TIMEOUT`                  | `10s`              | `string`       | Timeout for logs OTLP HTTP export requests.                                                                                        |
+| `LOGS_LEVEL`                         | `INFO`             | `string`       | Root Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).                                                      |
+| `LOGS_FILE_PATH`                     | `/tmp/worker.log`  | `string`       | Rotating log file path consumed by Alloy.                                                                                          |
+| `LOGS_FILE_MAX_BYTES`                | `20971520`         | `int`          | Max bytes per log file before rotation (20MB default).                                                                             |
+| `LOGS_FILE_BACKUP_COUNT`             | `4`                | `int`          | Number of rotated backups retained. Total cap is `(backup_count + 1) * max_bytes` (default: `5 * 20MB = 100MB`).                 |
+| `LOGS_INCLUDE_PROMPT_TEXT`           | `false`            | `bool`         | Include prompt text in worker logs when enabled. Keep disabled in production for sensitive data protection.                        |
+| `LOGS_INCLUDE_RESPONSE_TEXT`         | `false`            | `bool`         | Include model response text in worker logs when enabled. Keep disabled in production for sensitive data protection.                |
 
 ## Advanced Settings
 

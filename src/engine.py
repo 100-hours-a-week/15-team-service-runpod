@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+import traceback
 from typing import AsyncGenerator, Optional
 
 from dotenv import load_dotenv
@@ -18,14 +19,60 @@ from vllm.entrypoints.openai.models.serving import OpenAIServingModels
 
 from constants import DEFAULT_BATCH_SIZE, DEFAULT_BATCH_SIZE_GROWTH_FACTOR, DEFAULT_MAX_CONCURRENCY, DEFAULT_MIN_BATCH_SIZE
 from engine_args import get_engine_args
+from logging_setup import get_bool_env
 from tokenizer import TokenizerWrapper
 from utils import BatchSize, DummyRequest, JobInput, create_error_response
+
+log = logging.getLogger("worker.engine")
+
+
+def _should_include_prompt_text() -> bool:
+    return get_bool_env("LOGS_INCLUDE_PROMPT_TEXT", False)
+
+
+def _should_include_response_text() -> bool:
+    return get_bool_env("LOGS_INCLUDE_RESPONSE_TEXT", False)
+
+
+def _safe_error_message(exc: Exception) -> str:
+    if _should_include_prompt_text() or _should_include_response_text():
+        return str(exc)
+    return "<redacted>"
+
+
+def _format_traceback(exc: Exception) -> str:
+    if _should_include_prompt_text() or _should_include_response_text():
+        return traceback.format_exc()
+    stack_only = "".join(traceback.format_tb(exc.__traceback__))
+    return f"{stack_only}{exc.__class__.__name__}: <redacted>"
+
+
+def _truncate_text(value: str, max_chars: int = 512) -> str:
+    if len(value) <= max_chars:
+        return value
+    return f"{value[:max_chars]}...(truncated)"
+
+
+def _summarize_input_for_logs(llm_input) -> str:
+    include_prompt_text = _should_include_prompt_text()
+    if isinstance(llm_input, str):
+        if include_prompt_text:
+            return _truncate_text(llm_input)
+        return f"prompt_chars={len(llm_input)}"
+
+    if isinstance(llm_input, list):
+        if include_prompt_text:
+            return _truncate_text(json.dumps(llm_input, ensure_ascii=False))
+        return f"messages={len(llm_input)}"
+
+    return f"input_type={type(llm_input).__name__}"
+
 
 class vLLMEngine:
     def __init__(self, engine = None):
         load_dotenv() # For local development
         self.engine_args = get_engine_args()
-        logging.info(f"Engine args: {self.engine_args}")
+        log.info("engine args loaded")
         
         # Initialize vLLM engine first
         self.llm = self._initialize_llm() if engine is None else engine.llm
@@ -85,13 +132,25 @@ class vLLMEngine:
                 
                 return MinimalTokenizerWrapper(tokenizer)
             except Exception as e:
-                logging.error(f"Failed to create fallback tokenizer: {e}")
+                log.error(
+                    "failed to create fallback tokenizer error_type=%s error=%s",
+                    e.__class__.__name__,
+                    _safe_error_message(e),
+                )
                 raise e
 
     def dynamic_batch_size(self, current_batch_size, batch_size_growth_factor):
         return min(current_batch_size*batch_size_growth_factor, self.default_batch_size)
                            
     async def generate(self, job_input: JobInput):
+        request_start = time.time()
+        log.info(
+            "vllm request start request_id=%s stream=%s apply_chat_template=%s %s",
+            job_input.request_id,
+            job_input.stream,
+            job_input.apply_chat_template,
+            _summarize_input_for_logs(job_input.llm_input),
+        )
         try:
             async for batch in self._generate_vllm(
                 llm_input=job_input.llm_input,
@@ -104,7 +163,19 @@ class vLLMEngine:
                 min_batch_size=job_input.min_batch_size
             ):
                 yield batch
+            log.info(
+                "vllm request complete request_id=%s duration_s=%.3f",
+                job_input.request_id,
+                time.time() - request_start,
+            )
         except Exception as e:
+            log.error(
+                "vllm request failed request_id=%s error_type=%s error=%s",
+                job_input.request_id,
+                e.__class__.__name__,
+                _safe_error_message(e),
+            )
+            log.error("vllm request traceback request_id=%s\n%s", job_input.request_id, _format_traceback(e))
             yield {"error": create_error_response(str(e)).model_dump()}
 
     async def _generate_vllm(self, llm_input, validated_sampling_params, batch_size, stream, apply_chat_template, request_id, batch_size_growth_factor, min_batch_size: str) -> AsyncGenerator[dict, None]:
@@ -160,15 +231,26 @@ class vLLMEngine:
             batch["usage"] = {"input": n_input_tokens, "output": token_counters["total"]}
             yield batch
 
+        if _should_include_response_text():
+            log.debug(
+                "vllm response text request_id=%s output=%s",
+                request_id,
+                _truncate_text(json.dumps(last_output_texts, ensure_ascii=False)),
+            )
+
     def _initialize_llm(self):
         try:
             start = time.time()
             engine = AsyncLLMEngine.from_engine_args(self.engine_args)
             end = time.time()
-            logging.info(f"Initialized vLLM engine in {end - start:.2f}s")
+            log.info("initialized vLLM engine duration_s=%.2f", end - start)
             return engine
         except Exception as e:
-            logging.error("Error initializing vLLM engine: %s", e)
+            log.error(
+                "error initializing vLLM engine error_type=%s error=%s",
+                e.__class__.__name__,
+                _safe_error_message(e),
+            )
             raise e
 
 
@@ -187,11 +269,11 @@ class OpenAIvLLMEngine(vLLMEngine):
         # This affects all configurations, not just LoRA.
         self._engines_initialized = False
         if self.lora_adapters:
-            logging.info(f"LoRA mode: {len(self.lora_adapters)} adapter(s) will load on first request")
+            log.info("lora mode adapters=%s will load on first request", len(self.lora_adapters))
             for adapter in self.lora_adapters:
-                logging.info(f"  - {adapter.name}: {adapter.path}")
+                log.info("lora adapter name=%s path=%s", adapter.name, adapter.path)
         else:
-            logging.info("OpenAI engines will initialize on first request")
+            log.info("openai engines will initialize on first request")
 
         # Handle both integer and boolean string values for RAW_OPENAI_OUTPUT
         raw_output_env = os.getenv("RAW_OPENAI_OUTPUT", "1")
@@ -205,14 +287,22 @@ class OpenAIvLLMEngine(vLLMEngine):
         try:
             adapters = json.loads(os.getenv("LORA_MODULES", '[]'))
         except Exception as e:
-            logging.info(f"---Initialized adapter json load error: {e}")
+            log.info(
+                "initialized adapter json load error_type=%s error=%s",
+                e.__class__.__name__,
+                _safe_error_message(e),
+            )
 
         for i, adapter in enumerate(adapters):
             try:
                 adapters[i] = LoRAModulePath(**adapter)
-                logging.info(f"---Initialized adapter: {adapter}")
+                log.info("initialized adapter name=%s path=%s", adapter.get("name"), adapter.get("path"))
             except Exception as e:
-                logging.info(f"---Initialized adapter not worked: {e}")
+                log.info(
+                    "initialized adapter invalid error_type=%s error=%s",
+                    e.__class__.__name__,
+                    _safe_error_message(e),
+                )
                 continue
         return adapters
 
@@ -225,10 +315,10 @@ class OpenAIvLLMEngine(vLLMEngine):
         the correct event loop context.
         """
         if not self._engines_initialized:
-            logging.info("Initializing OpenAI serving engines...")
+            log.info("initializing OpenAI serving engines")
             await self._initialize_engines()
             self._engines_initialized = True
-            logging.info("OpenAI serving engines initialized successfully")
+            log.info("OpenAI serving engines initialized successfully")
 
     async def _initialize_engines(self):
         self.model_config = self.llm.model_config
@@ -280,6 +370,13 @@ class OpenAIvLLMEngine(vLLMEngine):
             await self.chat_engine.warmup()
 
     async def generate(self, openai_request: JobInput):
+        openai_input = openai_request.openai_input or {}
+        log.info(
+            "openai request start request_id=%s route=%s stream=%s",
+            openai_request.request_id,
+            openai_request.openai_route,
+            bool(openai_input.get("stream")),
+        )
         # Ensure engines are ready (no-op if already initialized at startup)
         await self._ensure_engines_initialized()
 
@@ -290,12 +387,18 @@ class OpenAIvLLMEngine(vLLMEngine):
                 yield response
         else:
             yield create_error_response("Invalid route").model_dump()
+        log.info(
+            "openai request complete request_id=%s route=%s",
+            openai_request.request_id,
+            openai_request.openai_route,
+        )
     
     async def _handle_model_request(self):
         models = await self.serving_models.show_available_models()
         return models.model_dump()
     
     async def _handle_chat_or_completion_request(self, openai_request: JobInput):
+        openai_input = openai_request.openai_input or {}
         if openai_request.openai_route == "/v1/chat/completions":
             request_class = ChatCompletionRequest
             generator_function = self.chat_engine.create_chat_completion
@@ -305,20 +408,32 @@ class OpenAIvLLMEngine(vLLMEngine):
         
         try:
             request = request_class(
-                **openai_request.openai_input
+                **openai_input
             )
         except Exception as e:
+            log.error(
+                "openai request validation failed request_id=%s error_type=%s error=%s",
+                openai_request.request_id,
+                e.__class__.__name__,
+                _safe_error_message(e),
+            )
+            log.error(
+                "openai request validation traceback request_id=%s\n%s",
+                openai_request.request_id,
+                _format_traceback(e),
+            )
             yield create_error_response(str(e)).model_dump()
             return
         
         dummy_request = DummyRequest()
         response_generator = await generator_function(request, raw_request=dummy_request)
 
-        if not openai_request.openai_input.get("stream") or isinstance(response_generator, ErrorResponse):
+        if not openai_input.get("stream") or isinstance(response_generator, ErrorResponse):
             yield response_generator.model_dump()
         else:
             batch = []
             batch_token_counter = 0
+            chunks = 0
             batch_size = BatchSize(self.default_batch_size, self.min_batch_size, self.batch_size_growth_factor)
         
             async for chunk_str in response_generator:
@@ -331,6 +446,7 @@ class OpenAIvLLMEngine(vLLMEngine):
                         data = json.loads(chunk_str.removeprefix("data: ").rstrip("\n\n")) if not self.raw_openai_output else chunk_str
                     batch.append(data)
                     batch_token_counter += 1
+                    chunks += 1
                     if batch_token_counter >= batch_size.current_batch_size:
                         if self.raw_openai_output:
                             batch = "".join(batch)
@@ -342,4 +458,5 @@ class OpenAIvLLMEngine(vLLMEngine):
                 if self.raw_openai_output:
                     batch = "".join(batch)
                 yield batch
+            log.info("openai stream emitted request_id=%s chunks=%s", openai_request.request_id, chunks)
             
