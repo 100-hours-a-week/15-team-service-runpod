@@ -30,23 +30,21 @@ All behaviour is controlled through environment variables:
 
 For complete configuration options, see the [full configuration documentation](https://github.com/runpod-workers/worker-vllm/blob/main/docs/configuration.md).
 
-## Metrics Push with Alloy
+## Direct OTLP Observability
 
-This worker can scrape internal vLLM Prometheus metrics and push them out as OTLP HTTP:
-
-`vLLM localhost scrape -> Alloy pipeline -> external OTLP endpoint`
+This worker exports metrics and logs directly from the Python process via OpenTelemetry SDK.
 
 Example configuration:
 
 ```bash
-METRICS_EXPORT_ENABLED=true
-METRICS_SCRAPE_TARGET=127.0.0.1:8000
-METRICS_SCRAPE_PATH=/metrics
-METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
-METRICS_OTLP_COMPRESSION=gzip
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_ENDPOINT=https://<collector>:4318
+OTEL_METRICS_EXPORT_ENABLED=true
+OTEL_LOGS_EXPORT_ENABLED=true
+OTEL_METRIC_EXPORT_INTERVAL=15000
 ```
 
-If `METRICS_OTLP_HTTP_ENDPOINT` is not set, metrics export remains disabled and the worker continues serving inference.
+If OTLP endpoints are not configured, observability export is disabled but inference continues.
 
 ## API Usage
 

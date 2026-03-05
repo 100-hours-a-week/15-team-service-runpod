@@ -12,3 +12,6 @@ transformers>=4.57.0,<5
 bitsandbytes>=0.45.0
 kernels
 torch-c-dlpack-ext
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http

@@ -69,24 +69,24 @@ Trace export remains vLLM-native:
 OTLP_TRACES_ENDPOINT=https://<collector>:4318/v1/traces
 ```
 
-Metrics export uses Alloy in the same container (GA-safe default).
-Logs export is available as an explicit preview opt-in.
-
-`vLLM localhost scrape + worker file logs -> Alloy pipeline -> external OTLP endpoint`
+Metrics and logs are exported directly from the worker process via OpenTelemetry SDK.
 
 Key environment variables:
 
 | Environment Variable               | Default           | Description                                                                 |
 | ---------------------------------- | ----------------- | --------------------------------------------------------------------------- |
-| `METRICS_EXPORT_ENABLED`           | `true`            | Enable metrics OTLP export pipeline.                                        |
-| `METRICS_OTLP_HTTP_ENDPOINT`       | `""`              | Metrics OTLP HTTP endpoint. Empty disables metrics export.                  |
-| `ALLOY_ENABLE_PREVIEW_LOGS`        | `false`           | Enable preview-only Alloy logs components (required for logs pipeline).     |
-| `LOGS_EXPORT_ENABLED`              | `false`           | Enable logs OTLP export pipeline (requires preview logs enabled).           |
-| `LOGS_OTLP_HTTP_ENDPOINT`          | `""`              | Logs OTLP HTTP endpoint. Empty falls back to `METRICS_OTLP_HTTP_ENDPOINT`.  |
-| `LOGS_OTLP_INSECURE`               | `false`           | Disable TLS for logs OTLP exporter.                                         |
-| `LOGS_OTLP_INSECURE_SKIP_VERIFY`   | `false`           | Skip TLS certificate validation for logs OTLP exporter.                     |
-| `LOGS_OTLP_COMPRESSION`            | `gzip`            | Logs OTLP HTTP compression (`gzip` or `none`).                              |
-| `LOGS_OTLP_TIMEOUT`                | `10s`             | Logs OTLP HTTP timeout.                                                     |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`      | `http/protobuf`   | OTLP transport protocol. Only `http/protobuf` is supported.                 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`      | `""`              | Base OTLP endpoint. Worker derives `/v1/metrics` and `/v1/logs`.            |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `""`           | Full metrics endpoint override.                                              |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `""`              | Full logs endpoint override.                                                 |
+| `OTEL_EXPORTER_OTLP_HEADERS`       | `""`              | OTLP HTTP headers (`k=v,k2=v2`).                                             |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`       | `10`              | OTLP export timeout in seconds.                                              |
+| `OTEL_EXPORTER_OTLP_COMPRESSION`   | `gzip`            | OTLP HTTP compression (`gzip` or `none`).                                    |
+| `OTEL_METRICS_EXPORT_ENABLED`      | `true`            | Enable direct OTLP metrics export.                                           |
+| `OTEL_LOGS_EXPORT_ENABLED`         | `true`            | Enable direct OTLP logs export.                                              |
+| `OTEL_METRIC_EXPORT_INTERVAL`      | `15000`           | Metrics export interval in milliseconds.                                     |
+| `OTEL_SERVICE_NAME`                | `worker-vllm`     | Service name attached to exported telemetry.                                 |
+| `OTEL_RESOURCE_ATTRIBUTES`         | `""`              | Additional resource attributes (`k=v,k2=v2`).                                |
 | `LOGS_LEVEL`                       | `INFO`            | Python root log level.                                                      |
 | `LOGS_FILE_PATH`                   | `/tmp/worker.log` | Rotating log file path.                                                     |
 | `LOGS_FILE_MAX_BYTES`              | `20971520`        | Max bytes per file before rotation (20MB).                                  |
@@ -94,13 +94,15 @@ Key environment variables:
 | `LOGS_INCLUDE_PROMPT_TEXT`         | `false`           | Include prompt text in logs (disabled by default for sensitive data safety). |
 | `LOGS_INCLUDE_RESPONSE_TEXT`       | `false`           | Include response text in logs (disabled by default for sensitive data safety). |
 
-Example (GA metrics only):
+Example (metrics + logs direct export):
 
 ```bash
-METRICS_EXPORT_ENABLED=true
-METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
-ALLOY_ENABLE_PREVIEW_LOGS=false
-LOGS_EXPORT_ENABLED=false
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_ENDPOINT=https://<collector>:4318
+OTEL_METRICS_EXPORT_ENABLED=true
+OTEL_LOGS_EXPORT_ENABLED=true
+OTEL_METRIC_EXPORT_INTERVAL=15000
+OTEL_SERVICE_NAME=worker-vllm
 LOGS_LEVEL=INFO
 LOGS_FILE_PATH=/tmp/worker.log
 LOGS_FILE_MAX_BYTES=20971520
@@ -109,14 +111,11 @@ LOGS_INCLUDE_PROMPT_TEXT=false
 LOGS_INCLUDE_RESPONSE_TEXT=false
 ```
 
-Example (preview logs + metrics):
+Per-signal endpoint override:
 
 ```bash
-METRICS_EXPORT_ENABLED=true
-METRICS_OTLP_HTTP_ENDPOINT=https://<collector>:4318
-ALLOY_ENABLE_PREVIEW_LOGS=true
-LOGS_EXPORT_ENABLED=true
-LOGS_OTLP_HTTP_ENDPOINT=
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://<collector>:4318/v1/metrics
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://<collector>:4318/v1/logs
 ```
 
 If an OTLP endpoint is missing/unreachable, only that signal pipeline is disabled or dropped; inference continues.

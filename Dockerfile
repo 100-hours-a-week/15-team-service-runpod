@@ -1,5 +1,4 @@
 FROM nvidia/cuda:12.4.1-base-ubuntu22.04 
-ARG ALLOY_VERSION=1.13.2
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
@@ -8,17 +7,6 @@ RUN apt-get update -y \
         build-essential \
         curl \
         ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG TARGETARCH
-RUN apt-get update -y \
-    && case "${TARGETARCH}" in \
-        amd64|arm64) ALLOY_DEB_ARCH="${TARGETARCH}" ;; \
-        *) echo "Unsupported TARGETARCH for Alloy package: ${TARGETARCH}" && exit 1 ;; \
-       esac \
-    && curl -fL "https://github.com/grafana/alloy/releases/download/v${ALLOY_VERSION}/alloy-${ALLOY_VERSION}-1.${ALLOY_DEB_ARCH}.deb" -o /tmp/alloy.deb \
-    && apt-get install -y --no-install-recommends /tmp/alloy.deb \
-    && rm -f /tmp/alloy.deb \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ldconfig /usr/local/cuda-12.4/compat/
@@ -61,17 +49,10 @@ ENV MODEL_NAME=$MODEL_NAME \
     # (tokenizers uses Rust's rayon which tries to spawn threads = CPU cores)
     TOKENIZERS_PARALLELISM=false \
     RAYON_NUM_THREADS=4 \
-    METRICS_EXPORT_ENABLED=true \
-    METRICS_SCRAPE_TARGET=127.0.0.1:8000 \
-    METRICS_SCRAPE_PATH=/metrics \
-    METRICS_SCRAPE_INTERVAL=15s \
-    METRICS_SCRAPE_TIMEOUT=5s \
-    METRICS_OTLP_HTTP_ENDPOINT= \
-    METRICS_OTLP_INSECURE=false \
-    METRICS_OTLP_INSECURE_SKIP_VERIFY=false \
-    METRICS_OTLP_COMPRESSION=gzip \
-    METRICS_OTLP_TIMEOUT=10s \
-    METRICS_PIPELINE_NAME=vllm \
+    OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+    OTEL_METRICS_EXPORT_ENABLED=true \
+    OTEL_LOGS_EXPORT_ENABLED=true \
+    OTEL_METRIC_EXPORT_INTERVAL=15000 \
     CC=/usr/bin/gcc \
     CXX=/usr/bin/g++
 

@@ -809,89 +809,75 @@
         }
       },
       {
-        "key": "METRICS_EXPORT_ENABLED",
+        "key": "OTEL_EXPORTER_OTLP_PROTOCOL",
         "input": {
-          "name": "Metrics Export Enabled",
-          "type": "boolean",
-          "description": "Enable internal vLLM metrics scrape and OTLP push via Alloy.",
-          "default": true,
+          "name": "OTLP Protocol",
+          "type": "string",
+          "description": "OTLP protocol for direct export. This worker supports http/protobuf only.",
+          "options": [
+            {
+              "label": "http/protobuf",
+              "value": "http/protobuf"
+            }
+          ],
+          "default": "http/protobuf",
           "advanced": true
         }
       },
       {
-        "key": "METRICS_SCRAPE_TARGET",
+        "key": "OTEL_EXPORTER_OTLP_ENDPOINT",
         "input": {
-          "name": "Metrics Scrape Target",
+          "name": "OTLP Base Endpoint",
           "type": "string",
-          "description": "Prometheus scrape target for vLLM metrics.",
-          "default": "127.0.0.1:8000",
-          "advanced": true
-        }
-      },
-      {
-        "key": "METRICS_SCRAPE_PATH",
-        "input": {
-          "name": "Metrics Scrape Path",
-          "type": "string",
-          "description": "HTTP path exposed by vLLM metrics endpoint.",
-          "default": "/metrics",
-          "advanced": true
-        }
-      },
-      {
-        "key": "METRICS_SCRAPE_INTERVAL",
-        "input": {
-          "name": "Metrics Scrape Interval",
-          "type": "string",
-          "description": "How often Alloy scrapes vLLM metrics.",
-          "default": "15s",
-          "advanced": true
-        }
-      },
-      {
-        "key": "METRICS_SCRAPE_TIMEOUT",
-        "input": {
-          "name": "Metrics Scrape Timeout",
-          "type": "string",
-          "description": "Timeout for each scrape attempt.",
-          "default": "5s",
-          "advanced": true
-        }
-      },
-      {
-        "key": "METRICS_OTLP_HTTP_ENDPOINT",
-        "input": {
-          "name": "Metrics OTLP HTTP Endpoint",
-          "type": "string",
-          "description": "External OTLP HTTP endpoint (for example https://collector:4318). If unset, metrics export stays disabled.",
+          "description": "Base OTLP endpoint (for example https://collector:4318). Worker derives /v1/metrics and /v1/logs.",
           "default": "",
           "advanced": true
         }
       },
       {
-        "key": "METRICS_OTLP_INSECURE",
+        "key": "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
         "input": {
-          "name": "Metrics OTLP Insecure",
-          "type": "boolean",
-          "description": "Disable TLS for OTLP HTTP exporter.",
-          "default": false,
+          "name": "OTLP Metrics Endpoint",
+          "type": "string",
+          "description": "Full OTLP endpoint override for metrics (for example https://collector:4318/v1/metrics).",
+          "default": "",
           "advanced": true
         }
       },
       {
-        "key": "METRICS_OTLP_INSECURE_SKIP_VERIFY",
+        "key": "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
         "input": {
-          "name": "Metrics OTLP Insecure Skip Verify",
-          "type": "boolean",
-          "description": "Skip TLS certificate verification for OTLP HTTP exporter.",
-          "default": false,
+          "name": "OTLP Logs Endpoint",
+          "type": "string",
+          "description": "Full OTLP endpoint override for logs (for example https://collector:4318/v1/logs).",
+          "default": "",
           "advanced": true
         }
       },
       {
-        "key": "METRICS_OTLP_COMPRESSION",
+        "key": "OTEL_EXPORTER_OTLP_HEADERS",
         "input": {
-          "name": "Metrics OTLP Compression",
+          "name": "OTLP Headers",
+          "type": "string",
+          "description": "Headers for OTLP requests using k=v,k2=v2 format.",
+          "default": "",
+          "advanced": true
+        }
+      },
+      {
+        "key": "OTEL_EXPORTER_OTLP_TIMEOUT",
+        "input": {
+          "name": "OTLP Timeout",
+          "type": "string",
+          "description": "Timeout for OTLP export requests in seconds (supports suffixes like ms, s, m).",
+          "default": "10",
+          "advanced": true
+        }
+      },
+      {
+        "key": "OTEL_EXPORTER_OTLP_COMPRESSION",
+        "input": {
+          "name": "OTLP Compression",
           "type": "string",
           "description": "Compression mode for OTLP HTTP exporter.",
           "options": [
@@ -909,102 +895,52 @@
         }
       },
       {
-        "key": "METRICS_OTLP_TIMEOUT",
+        "key": "OTEL_SERVICE_NAME",
         "input": {
-          "name": "Metrics OTLP Timeout",
+          "name": "OTel Service Name",
           "type": "string",
-          "description": "Timeout for OTLP HTTP export requests.",
-          "default": "10s",
+          "description": "service.name resource attribute attached to metrics and logs.",
+          "default": "worker-vllm",
           "advanced": true
         }
       },
       {
-        "key": "METRICS_PIPELINE_NAME",
+        "key": "OTEL_RESOURCE_ATTRIBUTES",
         "input": {
-          "name": "Metrics Pipeline Name",
+          "name": "OTel Resource Attributes",
           "type": "string",
-          "description": "Job label name attached to the scraped metrics stream.",
-          "default": "vllm",
-          "advanced": true
-        }
-      },
-      {
-        "key": "ALLOY_ENABLE_PREVIEW_LOGS",
-        "input": {
-          "name": "Alloy Preview Logs",
-          "type": "boolean",
-          "description": "Enable Alloy public-preview components for logs export.",
-          "default": false,
-          "advanced": true
-        }
-      },
-      {
-        "key": "LOGS_EXPORT_ENABLED",
-        "input": {
-          "name": "Logs Export Enabled",
-          "type": "boolean",
-          "description": "Enable logs OTLP export pipeline (requires Alloy Preview Logs).",
-          "default": false,
-          "advanced": true
-        }
-      },
-      {
-        "key": "LOGS_OTLP_HTTP_ENDPOINT",
-        "input": {
-          "name": "Logs OTLP HTTP Endpoint",
-          "type": "string",
-          "description": "External logs OTLP HTTP endpoint. Empty falls back to METRICS_OTLP_HTTP_ENDPOINT.",
+          "description": "Additional resource attributes using k=v,k2=v2 format.",
           "default": "",
           "advanced": true
         }
       },
       {
-        "key": "LOGS_OTLP_INSECURE",
+        "key": "OTEL_METRICS_EXPORT_ENABLED",
         "input": {
-          "name": "Logs OTLP Insecure",
+          "name": "Metrics Export Enabled",
           "type": "boolean",
-          "description": "Disable TLS for logs OTLP HTTP exporter.",
-          "default": false,
+          "description": "Enable direct OTLP metrics export from the worker process.",
+          "default": true,
           "advanced": true
         }
       },
       {
-        "key": "LOGS_OTLP_INSECURE_SKIP_VERIFY",
+        "key": "OTEL_LOGS_EXPORT_ENABLED",
         "input": {
-          "name": "Logs OTLP Insecure Skip Verify",
+          "name": "Logs Export Enabled",
           "type": "boolean",
-          "description": "Skip TLS certificate verification for logs OTLP exporter.",
-          "default": false,
+          "description": "Enable direct OTLP logs export from the worker process.",
+          "default": true,
           "advanced": true
         }
       },
       {
-        "key": "LOGS_OTLP_COMPRESSION",
+        "key": "OTEL_METRIC_EXPORT_INTERVAL",
         "input": {
-          "name": "Logs OTLP Compression",
-          "type": "string",
-          "description": "Compression mode for logs OTLP HTTP exporter.",
-          "options": [
-            {
-              "label": "gzip",
-              "value": "gzip"
-            },
-            {
-              "label": "none",
-              "value": "none"
-            }
-          ],
-          "default": "gzip",
-          "advanced": true
-        }
-      },
-      {
-        "key": "LOGS_OTLP_TIMEOUT",
-        "input": {
-          "name": "Logs OTLP Timeout",
-          "type": "string",
-          "description": "Timeout for logs OTLP HTTP export requests.",
-          "default": "10s",
+          "name": "Metric Export Interval",
+          "type": "number",
+          "description": "Periodic metric export interval in milliseconds.",
+          "default": 15000,
           "advanced": true
         }
       }

@@ -153,39 +153,43 @@ The way this works is that the first request will have a batch size of `DEFAULT_
 | ----------------------- | ------- | ------------ | ------------------------------------------------- |
 | `OTLP_TRACES_ENDPOINT`  | `None`  | `string`     | OTLP endpoint used by vLLM trace instrumentation. |
 
-Use these variables to run the Alloy sidecar pipeline for metrics + logs OTLP export.
+Use these variables for direct in-process OTLP export (OpenTelemetry SDK):
 
 | Variable                             | Default            | Type/Choices   | Description                                                                                                                        |
 | ------------------------------------ | ------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `METRICS_EXPORT_ENABLED`             | `true`             | `bool`         | Enable the Alloy-based metrics pipeline.                                                                                           |
-| `METRICS_SCRAPE_TARGET`              | `127.0.0.1:8000`   | `string`       | Prometheus scrape target inside the worker container.                                                                              |
-| `METRICS_SCRAPE_PATH`                | `/metrics`         | `string`       | Scrape path for the vLLM metrics endpoint.                                                                                         |
-| `METRICS_SCRAPE_INTERVAL`            | `15s`              | `string`       | Scrape interval.                                                                                                                   |
-| `METRICS_SCRAPE_TIMEOUT`             | `5s`               | `string`       | Scrape timeout.                                                                                                                    |
-| `METRICS_OTLP_HTTP_ENDPOINT`         | `""`               | `string`       | External OTLP HTTP endpoint (for example `https://collector:4318`). If unset, metrics export is disabled.                        |
-| `METRICS_OTLP_INSECURE`              | `false`            | `bool`         | Disable TLS for OTLP HTTP exporter connections.                                                                                    |
-| `METRICS_OTLP_INSECURE_SKIP_VERIFY`  | `false`            | `bool`         | Skip TLS certificate validation when TLS is enabled.                                                                               |
-| `METRICS_OTLP_COMPRESSION`           | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode.                                                                                                        |
-| `METRICS_OTLP_TIMEOUT`               | `10s`              | `string`       | Timeout for OTLP HTTP export requests.                                                                                             |
-| `METRICS_PIPELINE_NAME`              | `vllm`             | `string`       | Pipeline/job label name attached to scraped metrics.                                                                               |
-| `ALLOY_ENABLE_PREVIEW_LOGS`          | `false`            | `bool`         | Enable Alloy preview components for logs export. Must be `true` for logs OTLP pipeline to start.                                 |
-| `LOGS_EXPORT_ENABLED`                | `false`            | `bool`         | Enable the Alloy-based logs pipeline (preview-only).                                                                               |
-| `LOGS_OTLP_HTTP_ENDPOINT`            | `""`               | `string`       | Logs OTLP HTTP endpoint. When empty, it falls back to `METRICS_OTLP_HTTP_ENDPOINT`.                                               |
-| `LOGS_OTLP_INSECURE`                 | `false`            | `bool`         | Disable TLS for logs OTLP HTTP exporter connections.                                                                               |
-| `LOGS_OTLP_INSECURE_SKIP_VERIFY`     | `false`            | `bool`         | Skip TLS certificate validation for logs OTLP HTTP export.                                                                         |
-| `LOGS_OTLP_COMPRESSION`              | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode for logs.                                                                                               |
-| `LOGS_OTLP_TIMEOUT`                  | `10s`              | `string`       | Timeout for logs OTLP HTTP export requests.                                                                                        |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`        | `http/protobuf`    | `string`       | OTLP protocol. This worker supports only `http/protobuf`.                                                                          |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`        | `""`               | `string`       | Base OTLP endpoint (for example `https://collector:4318`). Worker derives `/v1/metrics` and `/v1/logs`.                         |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`| `""`               | `string`       | Full endpoint override for metrics export.                                                                                         |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`   | `""`               | `string`       | Full endpoint override for logs export.                                                                                            |
+| `OTEL_EXPORTER_OTLP_HEADERS`         | `""`               | `string`       | HTTP headers for OTLP exporters (`k=v,k2=v2`).                                                                                    |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`         | `10`               | `string`       | Timeout (seconds). Accepts numeric values and duration suffixes (`ms`, `s`, `m`).                                                |
+| `OTEL_EXPORTER_OTLP_COMPRESSION`     | `gzip`             | `gzip`, `none` | OTLP HTTP compression mode.                                                                                                        |
+| `OTEL_SERVICE_NAME`                  | `worker-vllm`      | `string`       | `service.name` resource attribute.                                                                                                 |
+| `OTEL_RESOURCE_ATTRIBUTES`           | `""`               | `string`       | Extra resource attributes (`k=v,k2=v2`).                                                                                          |
+| `OTEL_METRICS_EXPORT_ENABLED`        | `true`             | `bool`         | Enable metrics direct OTLP export.                                                                                                 |
+| `OTEL_LOGS_EXPORT_ENABLED`           | `true`             | `bool`         | Enable logs direct OTLP export.                                                                                                    |
+| `OTEL_METRIC_EXPORT_INTERVAL`        | `15000`            | `int`          | Metrics export interval in milliseconds.                                                                                           |
 | `LOGS_LEVEL`                         | `INFO`             | `string`       | Root Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`).                                                      |
-| `LOGS_FILE_PATH`                     | `/tmp/worker.log`  | `string`       | Rotating log file path consumed by Alloy.                                                                                          |
+| `LOGS_FILE_PATH`                     | `/tmp/worker.log`  | `string`       | Rotating log file path.                                                                                                            |
 | `LOGS_FILE_MAX_BYTES`                | `20971520`         | `int`          | Max bytes per log file before rotation (20MB default).                                                                             |
 | `LOGS_FILE_BACKUP_COUNT`             | `4`                | `int`          | Number of rotated backups retained. Total cap is `(backup_count + 1) * max_bytes` (default: `5 * 20MB = 100MB`).                 |
 | `LOGS_INCLUDE_PROMPT_TEXT`           | `false`            | `bool`         | Include prompt text in worker logs when enabled. Keep disabled in production for sensitive data protection.                        |
 | `LOGS_INCLUDE_RESPONSE_TEXT`         | `false`            | `bool`         | Include model response text in worker logs when enabled. Keep disabled in production for sensitive data protection.                |
 
-Notes:
+Migration from removed Alloy variables:
 
-- GA-safe default is metrics-only.
-- Logs OTLP pipeline requires both `ALLOY_ENABLE_PREVIEW_LOGS=true` and `LOGS_EXPORT_ENABLED=true`.
+| Removed variable | Replacement |
+| ---------------- | ----------- |
+| `METRICS_EXPORT_ENABLED` | `OTEL_METRICS_EXPORT_ENABLED` |
+| `METRICS_OTLP_HTTP_ENDPOINT` | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) |
+| `METRICS_OTLP_TIMEOUT` | `OTEL_EXPORTER_OTLP_TIMEOUT` |
+| `METRICS_OTLP_COMPRESSION` | `OTEL_EXPORTER_OTLP_COMPRESSION` |
+| `LOGS_EXPORT_ENABLED` | `OTEL_LOGS_EXPORT_ENABLED` |
+| `LOGS_OTLP_HTTP_ENDPOINT` | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) |
+| `LOGS_OTLP_TIMEOUT` | `OTEL_EXPORTER_OTLP_TIMEOUT` |
+| `LOGS_OTLP_COMPRESSION` | `OTEL_EXPORTER_OTLP_COMPRESSION` |
+| `ALLOY_ENABLE_PREVIEW_LOGS` | *(removed, no replacement needed)* |
+| `METRICS_SCRAPE_TARGET`/`METRICS_SCRAPE_PATH`/`METRICS_SCRAPE_INTERVAL`/`METRICS_SCRAPE_TIMEOUT` | *(removed; no scrape stage in direct OTLP mode)* |
 
 ## Advanced Settings
 
