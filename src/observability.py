@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Type
 
 try:
     from opentelemetry import metrics as otel_metrics
@@ -97,10 +97,11 @@ def _build_otlp_exporter_kwargs(signal: str) -> Optional[Dict[str, object]]:
     if not endpoint:
         return None
 
-    compression = str(os.getenv("OTEL_EXPORTER_OTLP_COMPRESSION", "gzip")).strip().lower()
-    if compression not in {"gzip", "none"}:
-        log.warning("Invalid OTLP compression '%s'; falling back to 'gzip'.", compression)
-        compression = "gzip"
+    compression_raw = str(os.getenv("OTEL_EXPORTER_OTLP_COMPRESSION", "gzip")).strip().lower()
+    if compression_raw not in {"gzip", "none"}:
+        log.warning("Invalid OTLP compression '%s'; falling back to 'gzip'.", compression_raw)
+        compression_raw = "gzip"
+    compression = _resolve_otlp_compression(compression_raw, signal)
 
     timeout_seconds = _parse_duration_seconds(os.getenv("OTEL_EXPORTER_OTLP_TIMEOUT"), 10.0)
     headers = _parse_headers(os.getenv("OTEL_EXPORTER_OTLP_HEADERS", ""))
@@ -128,6 +129,59 @@ def _build_resource() -> "Resource":
         if key:
             attrs[key] = val
     return Resource.create(attrs)
+
+
+def _get_signal_compression_enum(signal: str) -> Optional[Type[object]]:
+    enum_class = None
+    if signal == "metrics":
+        try:
+            from opentelemetry.exporter.otlp.proto.http.metric_exporter import Compression as MetricCompression
+
+            enum_class = MetricCompression
+        except Exception:
+            enum_class = None
+    elif signal == "logs":
+        try:
+            from opentelemetry.exporter.otlp.proto.http._log_exporter import Compression as LogCompression
+
+            enum_class = LogCompression
+        except Exception:
+            enum_class = None
+
+    if enum_class is not None:
+        return enum_class
+
+    try:
+        from opentelemetry.exporter.otlp.proto.http import Compression as BaseCompression
+
+        return BaseCompression
+    except Exception:
+        return None
+
+
+def _resolve_otlp_compression(compression_raw: str, signal: str):
+    enum_class = _get_signal_compression_enum(signal)
+    if enum_class is None:
+        # Older/newer OTel variants may still accept raw strings.
+        return compression_raw
+
+    try:
+        members = list(enum_class.__members__.values())  # type: ignore[attr-defined]
+    except Exception:
+        return compression_raw
+
+    for member in members:
+        name = str(getattr(member, "name", "")).lower()
+        value = str(getattr(member, "value", "")).lower()
+
+        if compression_raw in {name, value}:
+            return member
+        if compression_raw == "none" and ("none" in name or "no_compression" in name or "nocompression" in name):
+            return member
+        if compression_raw == "gzip" and "gzip" in name:
+            return member
+
+    return compression_raw
 
 
 def setup_otel_logs_handler(resource: "Resource"):
