@@ -3,6 +3,7 @@ prometheus.scrape "vllm" {
     {
       "__address__" = "__METRICS_SCRAPE_TARGET__",
       "job"         = "__METRICS_PIPELINE_NAME__",
+      "role"        = "vllm",
     },
   ]
   metrics_path    = "__METRICS_SCRAPE_PATH__"
