@@ -1,6 +1,8 @@
 import logging
 import os
 import threading
+import re
+import hashlib
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Type
 
@@ -217,6 +219,8 @@ class VLLMPrometheusBridge:
         self._registry = None
         self._names: List[str] = []
         self._names_set = set()
+        self._instrument_names_set = set()
+        self._original_to_instrument_name: Dict[str, str] = {}
         self._enabled = False
         self._lock = threading.Lock()
         self._init_registry()
@@ -258,13 +262,17 @@ class VLLMPrometheusBridge:
         names = sorted({name for name, _, _ in self._iter_samples()})
         return names
 
-    def _callback_for_name(self, metric_name: str):
+    def _callback_for_name(self, metric_name: str, instrument_name: str):
+        name_was_normalized = instrument_name != metric_name
+
         def _callback(_options):
             observations: List[Observation] = []
             for name, labels, value in self._iter_samples():
                 if name != metric_name:
                     continue
                 attributes = {str(k): str(v) for k, v in labels.items()}
+                if name_was_normalized:
+                    attributes["vllm_prometheus_metric_name"] = metric_name
                 try:
                     observations.append(Observation(float(value), attributes=attributes))
                 except Exception:
@@ -273,44 +281,65 @@ class VLLMPrometheusBridge:
 
         return _callback
 
-    def _register_metric_name(self, metric_name: str) -> None:
+    def _to_otel_metric_name(self, metric_name: str) -> str:
+        normalized = re.sub(r"[^a-zA-Z0-9_./-]", "_", metric_name)
+        if not normalized:
+            normalized = "vllm_metric"
+        if not normalized[0].isalpha():
+            normalized = f"vllm_{normalized}"
+        return normalized
+
+    def _to_unique_otel_metric_name(self, metric_name: str) -> str:
+        base_name = self._to_otel_metric_name(metric_name)
+        if base_name not in self._instrument_names_set:
+            return base_name
+        suffix = hashlib.md5(metric_name.encode("utf-8")).hexdigest()[:8]
+        return f"{base_name}_{suffix}"
+
+    def _register_metric_name(self, metric_name: str, instrument_name: str) -> None:
         self._meter.create_observable_gauge(
-            name=metric_name,
-            callbacks=[self._callback_for_name(metric_name)],
+            name=instrument_name,
+            callbacks=[self._callback_for_name(metric_name, instrument_name)],
             description="Bridged from vLLM Prometheus registry",
         )
 
     def refresh_registered_metrics(self) -> None:
-        try:
-            discovered_names = self._discover_metric_names()
-            if not discovered_names and not self._names:
-                log.warning("No vLLM Prometheus samples discovered; bridge registered no instruments.")
-                return
+        discovered_names = self._discover_metric_names()
+        if not discovered_names and not self._names:
+            log.warning("No vLLM Prometheus samples discovered; bridge registered no instruments.")
+            return
 
-            with self._lock:
-                newly_registered = 0
-                for metric_name in discovered_names:
-                    if metric_name in self._names_set:
-                        continue
-                    self._register_metric_name(metric_name)
-                    self._names_set.add(metric_name)
-                    self._names.append(metric_name)
-                    newly_registered += 1
+        with self._lock:
+            newly_registered = 0
+            for metric_name in discovered_names:
+                if metric_name in self._names_set:
+                    continue
 
-                self._enabled = bool(self._names)
+                instrument_name = self._to_unique_otel_metric_name(metric_name)
+                try:
+                    self._register_metric_name(metric_name, instrument_name)
+                except Exception as exc:
+                    log.warning(
+                        "Skipping vLLM metric '%s' during bridge registration (%s: %s).",
+                        metric_name,
+                        exc.__class__.__name__,
+                        exc,
+                    )
+                    continue
 
-            if newly_registered > 0:
-                log.info(
-                    "Registered %d new vLLM Prometheus bridge gauges (total=%d).",
-                    newly_registered,
-                    len(self._names),
-                )
-        except Exception as exc:
-            self._enabled = False
-            log.warning(
-                "Failed to initialize vLLM Prometheus bridge; continuing with worker metrics only (%s: %s).",
-                exc.__class__.__name__,
-                exc,
+                self._names_set.add(metric_name)
+                self._instrument_names_set.add(instrument_name)
+                self._original_to_instrument_name[metric_name] = instrument_name
+                self._names.append(metric_name)
+                newly_registered += 1
+
+            self._enabled = bool(self._names)
+
+        if newly_registered > 0:
+            log.info(
+                "Registered %d new vLLM Prometheus bridge gauges (total=%d).",
+                newly_registered,
+                len(self._names),
             )
 
 
