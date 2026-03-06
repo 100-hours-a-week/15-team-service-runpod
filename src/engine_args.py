@@ -6,6 +6,14 @@ from vllm import AsyncEngineArgs
 from vllm.model_executor.model_loader.tensorizer import TensorizerConfig
 from src.utils import convert_limit_mm_per_prompt
 
+
+def _optional_bool_env(name: str):
+    value = os.getenv(name)
+    if value is None:
+        return None
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 RENAME_ARGS_MAP = {
     "MODEL_NAME": "model",
     "MODEL_REVISION": "revision",
@@ -99,7 +107,7 @@ DEFAULT_ARGS = {
     "qlora_adapter_name_or_path": os.getenv('QLORA_ADAPTER_NAME_OR_PATH', None),
     "disable_logprobs_during_spec_decoding": os.getenv('DISABLE_LOGPROBS_DURING_SPEC_DECODING', None),
     "otlp_traces_endpoint": os.getenv('OTLP_TRACES_ENDPOINT', None),
-    "kv_cache_metrics": os.getenv('KV_CACHE_METRICS', None),
+    "kv_cache_metrics": _optional_bool_env("KV_CACHE_METRICS"),
     
 }
 

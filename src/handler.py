@@ -9,7 +9,12 @@ from logging_setup import configure_logging, get_bool_env
 configure_logging()
 log = logging.getLogger("worker")
 import runpod
-from observability import get_worker_metrics, setup_observability, shutdown_observability
+from observability import (
+    get_worker_metrics,
+    refresh_vllm_metrics_bridge,
+    setup_observability,
+    shutdown_observability,
+)
 
 vllm_engine = None
 openai_engine = None
@@ -42,6 +47,7 @@ async def handler(job):
         job_input = JobInput(job["input"])
         request_id = job_input.request_id
         route = job_input.openai_route or route
+        refresh_vllm_metrics_bridge()
         worker_metrics.on_request_started(route=route)
         request_started_recorded = True
         log.info(
@@ -93,6 +99,7 @@ async def handler(job):
 
         yield {"error": error_str}
     finally:
+        refresh_vllm_metrics_bridge()
         if request_started_recorded:
             worker_metrics.on_request_finished(route=route, latency_seconds=time.time() - started_at)
         if input_tokens > 0 or output_tokens > 0:
@@ -109,6 +116,7 @@ if __name__ == "__main__" or multiprocessing.current_process().name == "MainProc
 
         vllm_engine = vLLMEngine()
         openai_engine = OpenAIvLLMEngine(vllm_engine)
+        refresh_vllm_metrics_bridge()
         log.info("vLLM engines initialized successfully")
     except Exception as e:
         log.error("worker startup failed error_type=%s error=%s", e.__class__.__name__, _safe_error_message(e))

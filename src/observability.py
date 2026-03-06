@@ -216,10 +216,12 @@ class VLLMPrometheusBridge:
         self._meter = meter
         self._registry = None
         self._names: List[str] = []
+        self._names_set = set()
         self._enabled = False
+        self._lock = threading.Lock()
         self._init_registry()
         if self._registry is not None:
-            self._discover_and_register()
+            self.refresh_registered_metrics()
 
     def _init_registry(self) -> None:
         try:
@@ -254,8 +256,6 @@ class VLLMPrometheusBridge:
 
     def _discover_metric_names(self) -> List[str]:
         names = sorted({name for name, _, _ in self._iter_samples()})
-        if not names:
-            log.warning("No vLLM Prometheus samples discovered; bridge registered no instruments.")
         return names
 
     def _callback_for_name(self, metric_name: str):
@@ -273,18 +273,38 @@ class VLLMPrometheusBridge:
 
         return _callback
 
-    def _discover_and_register(self) -> None:
+    def _register_metric_name(self, metric_name: str) -> None:
+        self._meter.create_observable_gauge(
+            name=metric_name,
+            callbacks=[self._callback_for_name(metric_name)],
+            description="Bridged from vLLM Prometheus registry",
+        )
+
+    def refresh_registered_metrics(self) -> None:
         try:
-            self._names = self._discover_metric_names()
-            for metric_name in self._names:
-                self._meter.create_observable_gauge(
-                    name=metric_name,
-                    callbacks=[self._callback_for_name(metric_name)],
-                    description="Bridged from vLLM Prometheus registry",
+            discovered_names = self._discover_metric_names()
+            if not discovered_names and not self._names:
+                log.warning("No vLLM Prometheus samples discovered; bridge registered no instruments.")
+                return
+
+            with self._lock:
+                newly_registered = 0
+                for metric_name in discovered_names:
+                    if metric_name in self._names_set:
+                        continue
+                    self._register_metric_name(metric_name)
+                    self._names_set.add(metric_name)
+                    self._names.append(metric_name)
+                    newly_registered += 1
+
+                self._enabled = bool(self._names)
+
+            if newly_registered > 0:
+                log.info(
+                    "Registered %d new vLLM Prometheus bridge gauges (total=%d).",
+                    newly_registered,
+                    len(self._names),
                 )
-            self._enabled = bool(self._names)
-            if self._enabled:
-                log.info("Registered %d vLLM Prometheus bridge gauges.", len(self._names))
         except Exception as exc:
             self._enabled = False
             log.warning(
@@ -400,6 +420,18 @@ class ObservabilityRuntime:
     def _setup_logs(self, resource: "Resource") -> None:
         self._log_provider, self._otel_log_handler = setup_otel_logs_handler(resource)
 
+    def refresh_vllm_bridge_metrics(self) -> None:
+        if self._bridge is None:
+            return
+        try:
+            self._bridge.refresh_registered_metrics()
+        except Exception as exc:
+            log.warning(
+                "Failed to refresh vLLM bridge metrics (%s: %s).",
+                exc.__class__.__name__,
+                exc,
+            )
+
     def shutdown(self) -> None:
         if self._otel_log_handler is not None:
             root_logger = logging.getLogger()
@@ -438,6 +470,12 @@ def get_worker_metrics() -> WorkerMetrics:
     if _runtime is None:
         return WorkerMetrics(enabled=False)
     return _runtime.metrics
+
+
+def refresh_vllm_metrics_bridge() -> None:
+    if _runtime is None:
+        return
+    _runtime.refresh_vllm_bridge_metrics()
 
 
 def shutdown_observability() -> None:
